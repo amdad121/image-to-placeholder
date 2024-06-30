@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Image to Placeholder Image</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+        <style>
+            .masonry {
+                column-count: 3;
+                column-gap: 0.5rem;
+            }
+
+            .masonry-item {
+                display: inline-block;
+                margin-bottom: 1rem;
+                width: 100%;
+            }
+
+            .image-preview {
+                max-width: 100%;
+                height: auto;
+                display: block;
+                margin-bottom: 0.5rem;
+                border: 1px solid #ccc;
+                border-radius: 0.5rem;
+            }
+        </style>
+    </head>
+    <body class="bg-gray-100 p-8">
+        <div class="max-w-md mx-auto bg-white p-6 rounded-md shadow-md">
+            <h2 class="text-xl font-bold mb-4">Image to Placeholder Image</h2>
+            <div class="mb-4">
+                <label for="fileInput" class="block mb-2">Select image files:</label>
+                <input type="file" id="fileInput" multiple accept="image/*" />
+            </div>
+            <div id="previewContainer" class="masonry"></div>
+            <div class="flex justify-center space-x-4 mt-4">
+                <button id="uploadButton" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded">
+                    Download Images
+                </button>
+                <button
+                    id="resetButton"
+                    class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded"
+                >
+                    Reset
+                </button>
+            </div>
+        </div>
+
+        <!-- Include JSZip library -->
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.7.1/jszip.min.js"></script>
+
+        <script>
+            document.addEventListener('DOMContentLoaded', () => {
+                const fileInput = document.getElementById('fileInput');
+                const previewContainer = document.getElementById('previewContainer');
+                const uploadButton = document.getElementById('uploadButton');
+                const resetButton = document.getElementById('resetButton');
+
+                fileInput.addEventListener('change', handleFileSelect);
+
+                function handleFileSelect(event) {
+                    const files = event.target.files;
+                    previewContainer.innerHTML = ''; // Clear previous previews
+
+                    if (files.length === 0) {
+                        return; // No need to handle if no files are selected
+                    }
+
+                    for (let i = 0; i < files.length; i++) {
+                        const file = files[i];
+                        generatePlaceholderImage(file)
+                            .then((imageData) => {
+                                previewImage(file, imageData);
+                            })
+                            .catch((error) => {
+                                console.error('Error generating placeholder image:', error);
+                            });
+                    }
+                }
+
+                async function generatePlaceholderImage(file) {
+                    return new Promise((resolve) => {
+                        const canvas = document.createElement('canvas');
+                        const ctx = canvas.getContext('2d');
+                        const img = new Image();
+
+                        img.onload = function () {
+                            canvas.width = img.width;
+                            canvas.height = img.height;
+
+                            // Draw a simple placeholder image (gray background with text)
+                            ctx.fillStyle = '#ddd'; // Light gray background
+                            ctx.fillRect(0, 0, canvas.width, canvas.height);
+                            ctx.fillStyle = '#666'; // Dark gray text color
+
+                            // Adjust text size based on image dimensions
+                            const fontSize = Math.min(canvas.width, canvas.height) / 10;
+                            ctx.font = `${fontSize}px Arial`;
+
+                            ctx.textAlign = 'center';
+                            ctx.textBaseline = 'middle'; // Center text vertically
+                            ctx.fillText(`${canvas.width} x ${canvas.height}`, canvas.width / 2, canvas.height / 2);
+
+                            // Convert canvas to base64 data URL with correct file extension
+                            canvas.toBlob((blob) => {
+                                const reader = new FileReader();
+                                reader.onloadend = () => {
+                                    resolve(reader.result); // Resolve with base64 data
+                                };
+                                reader.readAsDataURL(blob, file.type); // Use original file type
+                            }, file.type); // Use original file type
+                        };
+
+                        img.src = URL.createObjectURL(file);
+                    });
+                }
+
+                function previewImage(file, imageData) {
+                    const img = document.createElement('img');
+                    img.classList.add('image-preview', 'masonry-item');
+                    img.src = imageData;
+                    img.alt = file.name;
+                    previewContainer.appendChild(img);
+                }
+
+                uploadButton.addEventListener('click', async function () {
+                    const files = fileInput.files;
+                    if (files.length === 0) {
+                        alert('Please select at least one image file.');
+                        return;
+                    }
+
+                    const zip = new JSZip();
+
+                    for (let i = 0; i < files.length; i++) {
+                        const file = files[i];
+                        const imageData = await generatePlaceholderImage(file);
+                        zip.file(file.name, imageData.split(';base64,')[1], { base64: true });
+                    }
+
+                    zip.generateAsync({ type: 'blob' }).then((blob) => {
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = 'images.zip';
+                        document.body.appendChild(a);
+                        a.click();
+                        setTimeout(() => {
+                            document.body.removeChild(a);
+                            window.URL.revokeObjectURL(url);
+                        }, 0);
+                    });
+                });
+
+                resetButton.addEventListener('click', function () {
+                    previewContainer.innerHTML = '';
+                    fileInput.value = ''; // Reset file input
+                });
+            });
+        </script>
+    </body>
+</html>
